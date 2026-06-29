@@ -1,5 +1,14 @@
 # @medusajs/event-bus-redis
 
+## 2.17.2
+
+### Patch Changes
+
+- [#15838](https://github.com/medusajs/medusa/pull/15838) [`cb454a097b6792a06564a7b601489e2cd651e00e`](https://github.com/medusajs/medusa/commit/cb454a097b6792a06564a7b601489e2cd651e00e) Thanks [@peterlgh7](https://github.com/peterlgh7)! - fix event-bus-redis onApplicationStart hook
+
+- Updated dependencies []:
+  - @medusajs/framework@2.17.2
+
 ## 2.17.1
 
 ### Patch Changes

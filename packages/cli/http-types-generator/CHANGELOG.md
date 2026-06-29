@@ -1,5 +1,7 @@
 # @medusajs/http-types-generator
 
+## 2.17.2
+
 ## 2.17.1
 
 ## 2.17.0

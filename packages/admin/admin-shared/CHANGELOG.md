@@ -1,5 +1,11 @@
 # @medusajs/admin-shared
 
+## 2.17.2
+
+### Patch Changes
+
+- [#15721](https://github.com/medusajs/medusa/pull/15721) [`7686adc8637b41879c4551ca422829ad2d63d6a9`](https://github.com/medusajs/medusa/commit/7686adc8637b41879c4551ca422829ad2d63d6a9) Thanks [@leobenzol](https://github.com/leobenzol)! - feat: drag&drop LayoutComposer, settings db persistence
+
 ## 2.17.1
 
 ## 2.17.0
