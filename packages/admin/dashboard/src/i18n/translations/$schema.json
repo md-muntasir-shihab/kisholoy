@@ -1086,6 +1086,90 @@
               "required": ["extensions"],
               "additionalProperties": false
             },
+            "groups": {
+              "type": "object",
+              "properties": {
+                "sales": {
+                  "type": "string"
+                },
+                "catalog": {
+                  "type": "string"
+                },
+                "other": {
+                  "type": "string"
+                },
+                "moduleCount_one": {
+                  "type": "string"
+                },
+                "moduleCount_other": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sales",
+                "catalog",
+                "other",
+                "moduleCount_one",
+                "moduleCount_other"
+              ],
+              "additionalProperties": false
+            },
+            "descriptions": {
+              "type": "object",
+              "properties": {
+                "orders": {
+                  "type": "string"
+                },
+                "products": {
+                  "type": "string"
+                },
+                "inventory": {
+                  "type": "string"
+                },
+                "customers": {
+                  "type": "string"
+                },
+                "promotions": {
+                  "type": "string"
+                },
+                "priceLists": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "orders",
+                "products",
+                "inventory",
+                "customers",
+                "promotions",
+                "priceLists"
+              ],
+              "additionalProperties": false
+            },
+            "badges": {
+              "type": "object",
+              "properties": {
+                "pending_one": {
+                  "type": "string"
+                },
+                "pending_other": {
+                  "type": "string"
+                },
+                "pendingSr_one": {
+                  "type": "string"
+                },
+                "pendingSr_other": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pending_one",
+                "pending_other",
+                "pendingSr_one",
+                "pendingSr_other"
+              ],
+              "additionalProperties": false
+            },
             "main": {
               "type": "object",
               "properties": {
@@ -1119,7 +1203,15 @@
               "additionalProperties": false
             }
           },
-          "required": ["accessibility", "common", "main", "settings"],
+          "required": [
+            "accessibility",
+            "common",
+            "groups",
+            "descriptions",
+            "badges",
+            "main",
+            "settings"
+          ],
           "additionalProperties": false
         }
       },
