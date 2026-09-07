@@ -1,4 +1,4 @@
-import { Kbd, Text, clx } from "@medusajs/ui"
+import { Badge, Kbd, Text, clx } from "@medusajs/ui"
 import { Collapsible as RadixCollapsible } from "radix-ui"
 import {
   PropsWithChildren,
@@ -20,10 +20,35 @@ type NestedItemProps = {
   translationNs?: string
 }
 
+export type NavItemBadge = {
+  /**
+   * Text rendered inside the badge, e.g. "2 pending".
+   */
+  label: string
+  /**
+   * Semantic color of the badge. Defaults to "grey".
+   */
+  color?: "grey" | "green" | "red" | "orange" | "blue"
+  /**
+   * Accessible description announced by screen readers, since the badge
+   * label on its own ("2 pending") lacks the module context.
+   */
+  srLabel?: string
+}
+
 export type INavItem = {
   icon?: ReactNode
   label: string
   to: string
+  /**
+   * Optional secondary line rendered under the label. Truncated to a single
+   * line so long Bangla strings cannot break the sidebar layout.
+   */
+  description?: string
+  /**
+   * Optional live counter rendered on the right of the label.
+   */
+  badge?: NavItemBadge
   items?: NestedItemProps[]
   type?: ItemType
   from?: string
@@ -130,9 +155,60 @@ const NavItemSubItem = ({
   )
 }
 
+const NavItemBadgeTag = ({ badge }: { badge: NavItemBadge }) => {
+  return (
+    <Badge
+      size="2xsmall"
+      color={badge.color ?? "grey"}
+      className="ml-auto shrink-0"
+      rounded="full"
+    >
+      <span aria-hidden={!!badge.srLabel}>{badge.label}</span>
+      {badge.srLabel ? <span className="sr-only">{badge.srLabel}</span> : null}
+    </Badge>
+  )
+}
+
+/**
+ * Renders the label, the optional description line and the optional badge.
+ * Shared by the desktop link, the mobile collapsible trigger and the mobile
+ * self-link so all three stay visually identical.
+ */
+const NavItemBody = ({
+  label,
+  description,
+  badge,
+}: {
+  label: string
+  description?: string
+  badge?: NavItemBadge
+}) => {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-x-2">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Text size="small" weight="plus" leading="compact" className="truncate">
+          {label}
+        </Text>
+        {description ? (
+          <Text
+            size="xsmall"
+            leading="compact"
+            className="text-ui-fg-muted truncate"
+          >
+            {description}
+          </Text>
+        ) : null}
+      </div>
+      {badge ? <NavItemBadgeTag badge={badge} /> : null}
+    </div>
+  )
+}
+
 export const NavItem = ({
   icon,
   label,
+  description,
+  badge,
   to,
   items,
   type = "core",
@@ -208,13 +284,15 @@ export const NavItem = ({
           }}
         >
           {type !== "setting" && (
-            <div className="flex size-6 items-center justify-center">
+            <div className="flex size-6 shrink-0 items-center justify-center">
               <Icon icon={icon} type={type} />
             </div>
           )}
-          <Text size="small" weight="plus" leading="compact">
-            {displayLabel}
-          </Text>
+          <NavItemBody
+            label={displayLabel}
+            description={description}
+            badge={badge}
+          />
         </NavLink>
       </NavItemTooltip>
       {items && items.length > 0 && (
@@ -225,12 +303,14 @@ export const NavItem = ({
               { "pl-2": isSetting }
             )}
           >
-            <div className="flex size-6 items-center justify-center">
+            <div className="flex size-6 shrink-0 items-center justify-center">
               <Icon icon={icon} type={type} />
             </div>
-            <Text size="small" weight="plus" leading="compact">
-              {displayLabel}
-            </Text>
+            <NavItemBody
+              label={displayLabel}
+              description={description}
+              badge={badge}
+            />
           </RadixCollapsible.Trigger>
           <RadixCollapsible.Content>
             <div className="flex flex-col gap-y-0.5 pb-2 pt-0.5">
@@ -251,9 +331,11 @@ export const NavItem = ({
                         )
                       }}
                     >
-                      <Text size="small" weight="plus" leading="compact">
-                        {displayLabel}
-                      </Text>
+                      <NavItemBody
+                        label={displayLabel}
+                        description={description}
+                        badge={badge}
+                      />
                     </NavLink>
                   </NavItemTooltip>
                 </li>

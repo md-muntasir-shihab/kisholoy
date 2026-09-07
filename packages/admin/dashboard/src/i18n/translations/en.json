@@ -268,6 +268,27 @@
       "common": {
         "extensions": "Extensions"
       },
+      "groups": {
+        "sales": "Sales & Operations",
+        "catalog": "Catalog & Inventory",
+        "other": "More",
+        "moduleCount_one": "{{count}} module",
+        "moduleCount_other": "{{count}} modules"
+      },
+      "descriptions": {
+        "orders": "Order lifecycle, fulfillments and returns",
+        "products": "Products, collections and categories",
+        "inventory": "Stock levels and reservations",
+        "customers": "Customer profiles and groups",
+        "promotions": "Discounts and campaigns",
+        "priceLists": "Price lists and overrides"
+      },
+      "badges": {
+        "pending_one": "{{count}} pending",
+        "pending_other": "{{count}} pending",
+        "pendingSr_one": "{{count}} pending order",
+        "pendingSr_other": "{{count}} pending orders"
+      },
       "main": {
         "store": "Store",
         "storeSettings": "Store settings"

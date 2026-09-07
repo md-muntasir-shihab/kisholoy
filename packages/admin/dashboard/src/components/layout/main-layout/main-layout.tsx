@@ -31,6 +31,7 @@ import { useExtension } from "../../../providers/extension-provider"
 import { useSearch } from "../../../providers/search-provider"
 import { UserMenu } from "../user-menu"
 import { useDocumentDirection } from "../../../hooks/use-document-direction"
+import { useNavBadges } from "./use-nav-badges"
 
 export const MainLayout = () => {
   return (
@@ -179,13 +180,25 @@ const Header = () => {
   )
 }
 
+type NavGroup = {
+  /**
+   * Stable key, also used to persist the collapsed/expanded state.
+   */
+  key: string
+  label: string
+  items: Omit<INavItem, "pathname">[]
+}
+
 const useCoreRoutes = (): Omit<INavItem, "pathname">[] => {
   const { t } = useTranslation()
+  const badges = useNavBadges()
 
   return [
     {
       icon: <ShoppingCart />,
       label: t("orders.domain"),
+      description: t("app.nav.descriptions.orders"),
+      badge: badges.orders,
       to: "/orders",
       items: [
         // TODO: Enable when domin is introduced
@@ -198,6 +211,7 @@ const useCoreRoutes = (): Omit<INavItem, "pathname">[] => {
     {
       icon: <Tag />,
       label: t("products.domain"),
+      description: t("app.nav.descriptions.products"),
       to: "/products",
       items: [
         {
@@ -222,6 +236,7 @@ const useCoreRoutes = (): Omit<INavItem, "pathname">[] => {
     {
       icon: <Buildings />,
       label: t("inventory.domain"),
+      description: t("app.nav.descriptions.inventory"),
       to: "/inventory",
       items: [
         {
@@ -233,6 +248,7 @@ const useCoreRoutes = (): Omit<INavItem, "pathname">[] => {
     {
       icon: <Users />,
       label: t("customers.domain"),
+      description: t("app.nav.descriptions.customers"),
       to: "/customers",
       items: [
         {
@@ -244,6 +260,7 @@ const useCoreRoutes = (): Omit<INavItem, "pathname">[] => {
     {
       icon: <ReceiptPercent />,
       label: t("promotions.domain"),
+      description: t("app.nav.descriptions.promotions"),
       to: "/promotions",
       items: [
         {
@@ -255,9 +272,57 @@ const useCoreRoutes = (): Omit<INavItem, "pathname">[] => {
     {
       icon: <CurrencyDollar />,
       label: t("priceLists.domain"),
+      description: t("app.nav.descriptions.priceLists"),
       to: "/price-lists",
     },
   ]
+}
+
+/**
+ * Groups the core routes into labelled sections.
+ *
+ * Only routes that actually exist in the router are referenced here, so no
+ * group can produce a dead link. The module counter is derived from the
+ * group's real contents rather than being hard-coded, which means it stays
+ * correct when a route is added, removed or hidden by permissions.
+ */
+const useCoreRouteGroups = (): NavGroup[] => {
+  const { t } = useTranslation()
+  const coreRoutes = useCoreRoutes()
+
+  const byPath = (path: string) => coreRoutes.find((r) => r.to === path)
+
+  const groups: NavGroup[] = [
+    {
+      key: "sales",
+      label: t("app.nav.groups.sales"),
+      items: ["/orders", "/customers", "/promotions", "/price-lists"]
+        .map(byPath)
+        .filter((r): r is Omit<INavItem, "pathname"> => !!r),
+    },
+    {
+      key: "catalog",
+      label: t("app.nav.groups.catalog"),
+      items: ["/products", "/inventory"]
+        .map(byPath)
+        .filter((r): r is Omit<INavItem, "pathname"> => !!r),
+    },
+  ]
+
+  // Anything not explicitly assigned to a group still has to be reachable,
+  // otherwise adding a new core route would silently hide it from the nav.
+  const grouped = new Set(groups.flatMap((g) => g.items.map((i) => i.to)))
+  const ungrouped = coreRoutes.filter((r) => !grouped.has(r.to))
+
+  if (ungrouped.length) {
+    groups.push({
+      key: "other",
+      label: t("app.nav.groups.other"),
+      items: ungrouped,
+    })
+  }
+
+  return groups.filter((g) => g.items.length > 0)
 }
 
 const Searchbar = () => {
@@ -288,8 +353,53 @@ const Searchbar = () => {
   )
 }
 
+const CoreRouteGroup = ({ group }: { group: NavGroup }) => {
+  const { t } = useTranslation()
+
+  return (
+    <RadixCollapsible.Root defaultOpen>
+      <div className="px-4">
+        <RadixCollapsible.Trigger asChild className="group/trigger">
+          <button className="text-ui-fg-subtle flex w-full items-center justify-between gap-x-2 px-2 py-1">
+            <div className="flex min-w-0 flex-col text-start">
+              <Text
+                size="xsmall"
+                weight="plus"
+                leading="compact"
+                className="truncate"
+              >
+                {group.label}
+              </Text>
+              <Text
+                size="xsmall"
+                leading="compact"
+                className="text-ui-fg-muted"
+              >
+                {t("app.nav.groups.moduleCount", {
+                  count: group.items.length,
+                })}
+              </Text>
+            </div>
+            <div className="text-ui-fg-muted shrink-0">
+              <ChevronDownMini className="group-data-[state=open]/trigger:hidden" />
+              <MinusMini className="group-data-[state=closed]/trigger:hidden" />
+            </div>
+          </button>
+        </RadixCollapsible.Trigger>
+      </div>
+      <RadixCollapsible.Content>
+        <div className="flex flex-col gap-y-0.5 py-1">
+          {group.items.map((route) => (
+            <NavItem key={route.to} {...route} />
+          ))}
+        </div>
+      </RadixCollapsible.Content>
+    </RadixCollapsible.Root>
+  )
+}
+
 const CoreRouteSection = () => {
-  const coreRoutes = useCoreRoutes()
+  const groups = useCoreRouteGroups()
 
   const { getMenu } = useExtension()
 
@@ -297,7 +407,9 @@ const CoreRouteSection = () => {
 
   menuItems.forEach((item) => {
     if (item.nested) {
-      const route = coreRoutes.find((route) => route.to === item.nested)
+      const route = groups
+        .flatMap((group) => group.items)
+        .find((route) => route.to === item.nested)
       if (route) {
         route.items?.push(item)
       }
@@ -305,11 +417,11 @@ const CoreRouteSection = () => {
   })
 
   return (
-    <nav className="flex flex-col gap-y-1 py-3">
+    <nav className="flex flex-col gap-y-3 py-3">
       <Searchbar />
-      {coreRoutes.map((route) => {
-        return <NavItem key={route.to} {...route} />
-      })}
+      {groups.map((group) => (
+        <CoreRouteGroup key={group.key} group={group} />
+      ))}
     </nav>
   )
 }
