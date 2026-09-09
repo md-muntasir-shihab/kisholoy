@@ -13,6 +13,8 @@ export const sdk = new Medusa({
 })
 
 // useful when you want to call the BE from the console and try things out quickly
-if (typeof window !== "undefined") {
+// exposed in development only, so production consoles don't get an
+// authenticated SDK handle attached to the global scope.
+if (typeof window !== "undefined" && import.meta.env.DEV) {
   ;(window as any).__sdk = sdk
 }

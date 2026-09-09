@@ -16,6 +16,58 @@ const NOISY_ENDPOINTS_CHUNKS = ["@fs", "@id", "@vite", "@react", "node_modules"]
 const isHealthCheck = (req: MedusaRequest) => req.path === "/health"
 
 /**
+ * Query string parameters whose values must never appear in HTTP access logs.
+ *
+ * Single-use secrets such as the admin invite token are transported as URL
+ * query parameters (e.g. `POST /admin/invites/accept?token=...`), and the
+ * `Referer` header can also carry them (e.g. navigation from `/invite?token=...`).
+ * Morgan logs the full URL and referrer by default, so we redact these values.
+ */
+const SENSITIVE_QUERY_PARAMS = new Set([
+  "token",
+  "invite_token",
+  "auth_token",
+  "code",
+  "password",
+])
+
+/**
+ * Replaces the values of known-sensitive query parameters with `[REDACTED]`,
+ * preserving the rest of the URL byte-for-byte.
+ */
+export function redactSensitiveQueryParams(url: string): string {
+  const queryStart = url.indexOf("?")
+  if (queryStart === -1) {
+    return url
+  }
+
+  const path = url.slice(0, queryStart + 1)
+  const query = url.slice(queryStart + 1)
+  if (!query) {
+    return url
+  }
+
+  const redacted = query.split("&").map((pair) => {
+    const separatorIndex = pair.indexOf("=")
+    const rawKey = separatorIndex === -1 ? pair : pair.slice(0, separatorIndex)
+
+    let key = rawKey
+    try {
+      key = decodeURIComponent(rawKey)
+    } catch {
+      // Keep the raw key if it is not valid percent-encoding.
+    }
+
+    if (SENSITIVE_QUERY_PARAMS.has(key.toLowerCase())) {
+      return `${rawKey}=[REDACTED]`
+    }
+    return pair
+  })
+
+  return path + redacted.join("&")
+}
+
+/**
  * Resolves the `sameSite` and `secure` flags used for the session cookie.
  *
  * In production/staging the cookie must be `Secure`, but `sameSite` is kept
@@ -71,6 +123,9 @@ export async function expressLoader({
     cookie: {
       sameSite,
       secure,
+      // Explicitly set httpOnly (also the express-session default) so the
+      // session id is never readable from client-side JavaScript.
+      httpOnly: true,
       maxAge: sessionOptions?.ttl ?? 10 * 60 * 60 * 1000,
       ...cookieOptions,
     },
@@ -103,6 +158,9 @@ export async function expressLoader({
 
   app.set("trust proxy", 1)
 
+  // Avoid disclosing the backend framework via the `X-Powered-By` header.
+  app.disable("x-powered-by")
+
   /**
    * Method to skip logging HTTP requests. We skip in test environment
    * and also exclude files served by vite during development
@@ -117,6 +175,23 @@ export async function expressLoader({
   }
 
   let loggingMiddleware: RequestHandler
+
+  // Custom morgan tokens that redact single-use secrets (e.g. invite tokens)
+  // transported as URL query parameters before they reach the access logs.
+  morgan.token("sanitized-url", (req) => {
+    const { originalUrl, url } = req as unknown as {
+      originalUrl?: string
+      url?: string
+    }
+    return redactSensitiveQueryParams(originalUrl ?? url ?? "")
+  })
+  morgan.token("sanitized-referrer", (req) => {
+    const headers = (req as unknown as { headers?: Record<string, string> })
+      .headers
+    return redactSensitiveQueryParams(
+      headers?.referrer ?? headers?.referer ?? "-"
+    )
+  })
 
   /**
    * The middleware to use for logging. We write the log messages
@@ -135,7 +210,7 @@ export async function expressLoader({
         // Standard HTTP request properties
         http_version: tokens["http-version"](req, res),
         method: tokens.method(req, res),
-        path: tokens.url(req, res),
+        path: redactSensitiveQueryParams(tokens.url(req, res)),
 
         // Response details
         status: Number(tokens.status(req, res)),
@@ -144,7 +219,7 @@ export async function expressLoader({
         duration: Number(tokens["response-time"](req, res)),
 
         // Useful headers that might help in debugging or tracing
-        referrer: tokens.referrer(req, res) || "-",
+        referrer: redactSensitiveQueryParams(tokens.referrer(req, res) || "-"),
         user_agent: tokens["user-agent"](req, res),
 
         timestamp: new Date().toISOString(),
@@ -158,7 +233,7 @@ export async function expressLoader({
     })
   } else {
     loggingMiddleware = morgan(
-      ":method :url ← :referrer (:status) - :response-time ms",
+      ":method :sanitized-url ← :sanitized-referrer (:status) - :response-time ms",
       {
         skip: shouldSkipHttpLog,
         stream: {
