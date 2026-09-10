@@ -258,3 +258,71 @@ the target application is identified.
 4. Merge or discard the sibling branch `arena/01a086ef-kisholoy`
    (`68b3647d`); its HTTP hardening overlaps with §3 and its `window.__sdk`
    dev handle should be dropped.
+
+---
+
+## 10. The Kisholoy application (`apps/kisholoy`) — added after review
+
+Reviewing the direction ("build the Kisholoy app in this fork") produced a real
+Medusa v2 application in `apps/kisholoy`, running against a real Postgres and
+verified end to end over HTTP. It is a standalone npm project inside the fork
+(not a yarn workspace member), pinning the published `@medusajs/*` 2.20.1
+packages.
+
+| Area | Where |
+| --- | --- |
+| Config with fail-fast secrets and no `*` CORS | `apps/kisholoy/medusa-config.ts` |
+| 21-product demo catalog, 4 stock locations, 13 categories, 2 coupons, delivery options, publishable key | `apps/kisholoy/src/scripts/seed.ts` |
+| Admin bootstrap from env vars (no argv, no hardcoded password) | `apps/kisholoy/src/scripts/create-admin.ts` |
+| Baseline security headers at the app layer | `apps/kisholoy/src/lib/security-headers.ts`, `apps/kisholoy/src/api/middlewares.ts` |
+| Local product photography, same-origin URLs | `apps/kisholoy/static/products/*.jpg` |
+| Runbook + verification log | `apps/kisholoy/README.md` |
+
+### Verified against the running server (real Postgres, real HTTP)
+
+`GET /admin/products` without a token → **401**; with a forged bearer token →
+**401**; admin login → 200 with a 504-char JWT; 21 products visible through both
+the admin and the store API; product image URL → `200 image/jpeg` (151,406
+bytes) with a working placeholder fallback for products whose photo has not been
+produced yet.
+
+Order lifecycle, all server-side:
+
+- Cart posted with `unit_price: 1` → stored at the real price `18000`, subtotal
+  `36000` (**price tampering ignored**).
+- `quantity: -3` → 400 validation error. `quantity: 500` against 120 in stock →
+  `insufficient_inventory` (**no overselling**).
+- Express delivery ৳120 → order total `48000` = `36000` items + `12000` shipping.
+- Coupon `HACKED99` → rejected. Coupon `KISHOLOY10` → 10% of 36000 = `3600`
+  discount, total `32400`.
+- `POST /store/carts/:id/complete` → **order created**, `display_id` 1, status
+  `pending`.
+- Payment collection `authorized`, `paid_total: 0` — the manual provider does
+  not fabricate a successful payment; an admin has to capture.
+- Inventory after the order: `stocked_quantity` 120, `reserved_quantity` 2, at
+  the in-house stock location.
+- Re-running the seed: 0 products created, 0 inventory levels created, image
+  URLs refreshed — the seed is idempotent.
+
+Checks run: `npx tsc --noEmit` (clean), `npx medusa db:migrate` (clean),
+`npx medusa exec ./src/scripts/seed.ts` (clean, twice), and the HTTP assertions
+above.
+
+### Known limitations
+
+1. **Product photography is incomplete.** 9 of 21 products have a generated
+   photograph; the rest fall back to a shared placeholder. This turn hit the
+   image-generation limit — the remaining 12 are a follow-up, and re-running the
+   seed picks them up automatically.
+2. **No storefront.** SEO, responsive layout and the customer journey need the
+   Next.js storefront pointed at this backend; nothing here renders pages yet.
+3. **No real payment provider.** `pp_system_default` only; bKash/Nagad/
+   SSLCommerz/Stripe still need to be wired and their webhooks verified.
+4. **Coupons are simple.** Global usage caps work; a maximum discount amount and
+   a per-customer cap need a campaign budget.
+5. **`X-Powered-By: Express` is still present on the running app**, because it
+   runs the published `@medusajs/medusa` 2.20.1. Removing it needs either the
+   framework patch from §3 or stripping it at the edge.
+6. **This sandbox has no outbound network** except the npm registry and the
+   GitHub API, so third-party image hosts could not be used or verified; the
+   same-origin `/static` approach was chosen instead.

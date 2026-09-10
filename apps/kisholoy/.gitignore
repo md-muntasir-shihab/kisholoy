@@ -1,0 +1,9 @@
+node_modules
+.medusa
+.cache
+dist
+build
+.env
+.env.local
+static/uploads
+*.log
