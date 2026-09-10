@@ -10,6 +10,12 @@ import morgan from "morgan"
 import path from "path"
 import { configManager } from "../config"
 import { MedusaRequest, MedusaResponse } from "./types"
+import {
+  redactSensitiveQueryParams,
+  sanitizedRequestReferrer,
+  sanitizedRequestUrl,
+} from "./utils/redact-sensitive-query-params"
+import { securityHeaders } from "./utils/security-headers"
 
 const NOISY_ENDPOINTS_CHUNKS = ["@fs", "@id", "@vite", "@react", "node_modules"]
 
@@ -73,6 +79,9 @@ export async function expressLoader({
       secure,
       maxAge: sessionOptions?.ttl ?? 10 * 60 * 60 * 1000,
       ...cookieOptions,
+      // Applied last so that a user supplied `cookieOptions` cannot turn it
+      // off: the session id must never be readable from client-side JS.
+      httpOnly: true,
     },
     store: null,
   }
@@ -103,6 +112,11 @@ export async function expressLoader({
 
   app.set("trust proxy", 1)
 
+  // Do not advertise the server implementation through `X-Powered-By`.
+  app.disable("x-powered-by")
+
+  app.use(securityHeaders({ isProduction, isStaging }))
+
   /**
    * Method to skip logging HTTP requests. We skip in test environment
    * and also exclude files served by vite during development
@@ -117,6 +131,14 @@ export async function expressLoader({
   }
 
   let loggingMiddleware: RequestHandler
+
+  /**
+   * Morgan tokens that keep single-use secrets (invite tokens, reset tokens,
+   * OAuth codes) out of the access log. Both the URL and the `Referer` header
+   * can carry them.
+   */
+  morgan.token("sanitized-url", sanitizedRequestUrl)
+  morgan.token("sanitized-referrer", sanitizedRequestReferrer)
 
   /**
    * The middleware to use for logging. We write the log messages
@@ -135,7 +157,7 @@ export async function expressLoader({
         // Standard HTTP request properties
         http_version: tokens["http-version"](req, res),
         method: tokens.method(req, res),
-        path: tokens.url(req, res),
+        path: redactSensitiveQueryParams(tokens.url(req, res)),
 
         // Response details
         status: Number(tokens.status(req, res)),
@@ -144,7 +166,7 @@ export async function expressLoader({
         duration: Number(tokens["response-time"](req, res)),
 
         // Useful headers that might help in debugging or tracing
-        referrer: tokens.referrer(req, res) || "-",
+        referrer: redactSensitiveQueryParams(tokens.referrer(req, res) || "-"),
         user_agent: tokens["user-agent"](req, res),
 
         timestamp: new Date().toISOString(),
@@ -158,7 +180,7 @@ export async function expressLoader({
     })
   } else {
     loggingMiddleware = morgan(
-      ":method :url ← :referrer (:status) - :response-time ms",
+      ":method :sanitized-url ← :sanitized-referrer (:status) - :response-time ms",
       {
         skip: shouldSkipHttpLog,
         stream: {
